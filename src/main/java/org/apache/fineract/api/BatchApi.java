@@ -359,15 +359,16 @@ public class BatchApi {
                     }
                 }
                 total++;
-                BigDecimal amount = transfer.getAmount();
+                // a transfer with no amount (yet) still counts, with amount 0, instead of failing the whole summary
+                BigDecimal amount = transfer.getAmount() != null ? transfer.getAmount() : BigDecimal.ZERO;
                 totalAmount = totalAmount.add(amount);
-                if (transfer.getStatus().equals(TransferStatus.COMPLETED)) {
+                if (TransferStatus.COMPLETED.equals(transfer.getStatus())) {
                     completed++;
                     completedAmount = completedAmount.add(amount);
-                } else if (transfer.getStatus().equals(TransferStatus.FAILED)) {
+                } else if (TransferStatus.FAILED.equals(transfer.getStatus())) {
                     failed++;
                     failedAmount = failedAmount.add(amount);
-                } else if (transfer.getStatus().equals(TransferStatus.IN_PROGRESS)) {
+                } else if (TransferStatus.IN_PROGRESS.equals(transfer.getStatus())) {
                     if (transfer.getCompletedAt() == null || transfer.getCompletedAt().toString().isEmpty()) {
                         ongoing++;
                         ongoingAmount = ongoingAmount.add(amount);
