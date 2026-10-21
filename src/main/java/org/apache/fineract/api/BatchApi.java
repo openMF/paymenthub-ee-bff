@@ -327,7 +327,14 @@ public class BatchApi {
 
         return response;
     }
-    private void evaluateBatchSummary(Batch batch) {
+    /**
+     * Recomputes and saves the batch row's figures from its transfers.
+     *
+     * @return true if this is a sub-batch with no transfers of its own, so it was counted from the parent batch's
+     *         transfers (closedloop stores them under the parent batchId)
+     */
+    private boolean evaluateBatchSummary(Batch batch) {
+        boolean countedFromParent = false;
         Long completed = 0L;
         Long failed = 0L;
         Long total = 0L;
@@ -343,6 +350,7 @@ public class BatchApi {
                 // Closedloop path: transfers are stored under the parent batchId, not the sub-batch ID.
                 // Fall back to parent batchId so sub-batch totals are correctly counted.
                 transfers = transferRepository.findAllByBatchId(batch.getBatchId());
+                countedFromParent = true;
             }
         }else{
             transfers = transferRepository.findAllByBatchId(batch.getBatchId());
@@ -359,15 +367,16 @@ public class BatchApi {
                     }
                 }
                 total++;
-                BigDecimal amount = transfer.getAmount();
+                // a transfer with no amount (yet) still counts, with amount 0, instead of failing the whole summary
+                BigDecimal amount = transfer.getAmount() != null ? transfer.getAmount() : BigDecimal.ZERO;
                 totalAmount = totalAmount.add(amount);
-                if (transfer.getStatus().equals(TransferStatus.COMPLETED)) {
+                if (TransferStatus.COMPLETED.equals(transfer.getStatus())) {
                     completed++;
                     completedAmount = completedAmount.add(amount);
-                } else if (transfer.getStatus().equals(TransferStatus.FAILED)) {
+                } else if (TransferStatus.FAILED.equals(transfer.getStatus())) {
                     failed++;
                     failedAmount = failedAmount.add(amount);
-                } else if (transfer.getStatus().equals(TransferStatus.IN_PROGRESS)) {
+                } else if (TransferStatus.IN_PROGRESS.equals(transfer.getStatus())) {
                     if (transfer.getCompletedAt() == null || transfer.getCompletedAt().toString().isEmpty()) {
                         ongoing++;
                         ongoingAmount = ongoingAmount.add(amount);
@@ -381,6 +390,7 @@ public class BatchApi {
             batch.setResult_file(createDetailsFile(transfers));
         }
         saveBatch(batch, completed, ongoing, failed, total, totalAmount.longValue(), completedAmount.longValue(), ongoingAmount.longValue(), failedAmount.longValue());
+        return countedFromParent;
     }
     private Batch getParentBatchSummary(List<Batch> batches){
         StringBuilder modes = new StringBuilder();
@@ -432,6 +442,8 @@ public class BatchApi {
 
         StringBuilder modes = new StringBuilder();
         List<Batch> batches = batchRepository.findAllByBatchId(batch.getBatchId());
+        boolean subBatchCountedFromParent = false;
+        Batch parentBatch = null;
         for (Batch subBatch:batches){
             if (subBatch.getPaymentMode() != null && !modes.toString().contains(subBatch.getPaymentMode())) {
                 if (!modes.toString().equals("")) {
@@ -439,11 +451,19 @@ public class BatchApi {
                 }
                 modes.append(subBatch.getPaymentMode());
             }
-            evaluateBatchSummary(subBatch);
+            if (subBatch.getSubBatchId() == null || subBatch.getSubBatchId().isEmpty()) {
+                parentBatch = subBatch;
+            }
+            subBatchCountedFromParent |= evaluateBatchSummary(subBatch);
         }
         Batch parentBatchSummary = null;
         if(batches.size()==1){
             parentBatchSummary = batch;
+        } else if (subBatchCountedFromParent && parentBatch != null) {
+            // Each such sub-batch counted all of the parent's transfers, so adding the sub-batches up would count every
+            // transfer once per sub-batch. The parent row was evaluated from its own transfers above: use that.
+            // Interim: nothing yet links a transfer to its sub-batch (PHEE-421).
+            parentBatchSummary = parentBatch;
         }else{
             parentBatchSummary = getParentBatchSummary(batches);
         }
