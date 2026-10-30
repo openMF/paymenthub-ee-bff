@@ -112,6 +112,14 @@ channel-connector:
   url: http://bb-connector-channel.mifos.io
   transfer-path: /channel/transfer
 
+# /api/v1/beneficiaries proxies to paymenthub-ee-account-mapper.
+account-mapper:
+  url: http://paymenthub-ee-account-mapper
+  # account-mapper requires an X-CallbackURL on register and update and reports
+  # rejected beneficiaries only there. The BFF reads the record back instead, so
+  # nothing has to receive it; account-mapper logs the failed callback.
+  callback-url: http://localhost/callback
+
 management:
 #  server:
 #    port: 5000
