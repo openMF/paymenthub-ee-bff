@@ -60,6 +60,15 @@ rest:
         authority: "hasAuthority('REFUND')"
       - endpoint: "/api/v1/**"
         authority: "hasAuthority('ALL_FUNCTIONS')"
+    # Keycloak realm whose access tokens are accepted next to the /oauth/token ones
+    # (the operations web console logs in there). Off while issuer-uri is empty.
+    # Realm roles are the authorities above, and the tenants claim must list the
+    # request's tenant. jwk-set-uri defaults to <issuer-uri>/protocol/openid-connect/certs;
+    # set it when the BFF reaches Keycloak by another name than the browser does.
+    keycloak:
+      issuer-uri: ""
+      jwk-set-uri: ""
+      tenants-claim: "tenants"
 logging:
   level:
     ROOT: ERROR

@@ -52,6 +52,9 @@ import java.util.List;
  *   check (AudienceVerifier)
  * - the "authorities" claim of the token becomes the granted authorities,
  *   with no prefix (same as the old JwtAccessTokenConverter contract)
+ *
+ * Added since: access tokens of a Keycloak realm are accepted as well when
+ * rest.authorization.keycloak.issuer-uri is set (see KeycloakTokens).
  */
 @Configuration
 @EnableWebSecurity
@@ -178,8 +181,12 @@ public class ResourceServerConfig {
         JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
         authoritiesConverter.setAuthoritiesClaimName("authorities");
         authoritiesConverter.setAuthorityPrefix("");
+        AuthProperties.Keycloak keycloak = authProperties.getKeycloak();
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> keycloak.isEnabled()
+                && keycloak.getIssuerUri().equals(jwt.getClaimAsString("iss"))
+                ? KeycloakTokens.realmRoles(jwt)
+                : authoritiesConverter.convert(jwt));
         return converter;
     }
 
@@ -192,12 +199,20 @@ public class ResourceServerConfig {
      * explicit rule in rest.authorization.settings, for the whole
      * refresh_token_validity (30 days by default, against 12 hours for an access
      * token).
+     *
+     * With rest.authorization.keycloak.issuer-uri set, tokens from that realm are
+     * routed to KeycloakTokens' decoder instead (see IssuerRoutingJwtDecoder).
      */
     @Bean
     @Primary
     public JwtDecoder jwtDecoder(AudienceVerifier audienceVerifier) {
-        return buildDecoder(List.of(JwtValidators.createDefault(), resourceIdValidator(), audienceVerifier,
+        JwtDecoder legacyDecoder = buildDecoder(List.of(JwtValidators.createDefault(), resourceIdValidator(), audienceVerifier,
                 accessTokenOnlyValidator()));
+        AuthProperties.Keycloak keycloak = authProperties.getKeycloak();
+        if (!keycloak.isEnabled()) {
+            return legacyDecoder;
+        }
+        return new IssuerRoutingJwtDecoder(keycloak.getIssuerUri(), KeycloakTokens.decoder(keycloak), legacyDecoder);
     }
 
     /**
