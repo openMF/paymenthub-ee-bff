@@ -48,6 +48,9 @@ import static org.apache.fineract.core.service.OperatorUtils.strip;
 @SecurityRequirement(name = "auth")
 @RequestMapping("/api/v1")
 public class BatchApi {
+
+    /** Note the importer writes on a batch whose flow failed (incident, or a "Failed" end event). */
+    static final String FAILED_BATCH_NOTE = "Failed Batch Request";
     @Autowired
     private TransferRepository transferRepository;
 
@@ -315,7 +318,10 @@ public class BatchApi {
         response.setModes(modes);
         response.setPurpose("Unknown purpose");
 
-        if (batch.getCompleted().longValue() == batch.getTotalTransactions().longValue()) {
+        if (batch.getNote() != null && batch.getNote().startsWith(FAILED_BATCH_NOTE)) {
+            // the batch flow itself failed (importer note), whatever its transfers say
+            response.setStatus("Failed");
+        } else if (batch.getCompleted().longValue() == batch.getTotalTransactions().longValue()) {
             response.setStatus("COMPLETED");
         } else if (batch.getOngoing() != 0 && batch.getCompletedAt() == null) {
             response.setStatus("Pending");

@@ -56,6 +56,25 @@ class BatchApiSubBatchTotalsTest {
         assertEquals(1L, summary.getFailed());
     }
 
+    /** PHEE-476: a batch whose own flow failed (for example "Merge Failed") is Failed, whatever its transfers say. */
+    @Test
+    void batchWithAFailedFlowIsFailedEvenIfItsTransfersCompleted() throws Exception {
+        Batch parent = batch(null);
+        parent.setNote("Failed Batch Request: Event_MergeFailed");
+
+        BatchDTO summary = summarise(List.of(parent), Map.of(BATCH_ID, List.of(transfer(TransferStatus.COMPLETED, "10"))));
+
+        assertEquals(1L, summary.getSuccessful());
+        assertEquals("Failed", summary.getStatus());
+    }
+
+    @Test
+    void allCompletedIsCompleted() throws Exception {
+        BatchDTO summary = summarise(List.of(batch(null)), Map.of(BATCH_ID, List.of(transfer(TransferStatus.COMPLETED, "10"))));
+
+        assertEquals("COMPLETED", summary.getStatus());
+    }
+
     private static BatchDTO summarise(List<Batch> rows, Map<String, List<Transfer>> transfersByBatchId) throws Exception {
         BatchApi api = new BatchApi();
         set(api, "batchRepository", proxy(BatchRepository.class, (method, args) -> switch (method) {
