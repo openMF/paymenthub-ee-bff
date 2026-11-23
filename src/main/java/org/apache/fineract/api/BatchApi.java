@@ -287,7 +287,12 @@ public class BatchApi {
         batch.setCompletedAmount(totalCompletedAmount);
         batch.setOngoingAmount(totalOngoingAmount);
         batch.setFailedAmount(totalFailedAmount);
-        batch.setCompletedAt(new Date());
+        // This runs on every read of a batch, so "now" is only a completed time once no transfer is
+        // still ongoing, and an earlier one is kept. A batch row the importer owns gets its flow's
+        // real end time from the importer when the flow completes.
+        if (batch.getCompletedAt() == null && totalTransfers > 0 && ongoing == 0) {
+            batch.setCompletedAt(new Date());
+        }
         if(completed.equals(totalTransfers)){
             batch.setStatus(BatchStatus.COMPLETED);
         } else if(ongoing > 0){
