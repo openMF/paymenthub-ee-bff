@@ -22,7 +22,7 @@ tenant already created — the JDBC url does not create databases.
 
 Two things have to be done before `docker compose up`, or it will not come up:
 
-1. **Build the jar.** The image copies `build/libs/*.jar`, so without this the image
+1. **Build the jar.** The image copies `build/libs/app.jar`, so without this the image
    build fails with `lstat /build/libs: no such file or directory`.
    ```
    ./gradlew bootJar
@@ -50,7 +50,7 @@ To run it against a MySQL you already have:
 ```
 ./gradlew bootJar
 FINERACT_DATASOURCE_CORE_HOST=127.0.0.1 SPRING_PROFILES_ACTIVE=bb \
-  java -jar build/libs/paymenthub-ee-bff-*.jar
+  java -jar build/libs/app.jar
 ```
 
 ## Getting a token
