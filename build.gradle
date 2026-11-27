@@ -19,7 +19,7 @@ java {
 bootJar {
     mainClass = 'org.apache.fineract.ServerApplication'
     enabled = true
-    archiveClassifier = '' // so bootJar replaces the default jar
+    archiveFileName = 'app.jar'
 }
 
 springBoot {
