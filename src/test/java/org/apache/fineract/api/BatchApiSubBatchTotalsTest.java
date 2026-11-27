@@ -1,12 +1,16 @@
 package org.apache.fineract.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -73,6 +77,42 @@ class BatchApiSubBatchTotalsTest {
         BatchDTO summary = summarise(List.of(batch(null)), Map.of(BATCH_ID, List.of(transfer(TransferStatus.COMPLETED, "10"))));
 
         assertEquals("COMPLETED", summary.getStatus());
+    }
+
+    /** PHEE-480: reading a batch used to stamp it completed "now", even with transfers still ongoing. */
+    @Test
+    void readingARunningBatchDoesNotGiveItACompletedTime() throws Exception {
+        List<Batch> rows = List.of(batch(null), batch("S1"));
+
+        summarise(rows, Map.of(BATCH_ID, List.of(transfer(TransferStatus.COMPLETED, "10"), transfer(TransferStatus.IN_PROGRESS, "16"))));
+
+        rows.forEach(row -> assertNull(row.getCompletedAt(), "row " + row.getSubBatchId()));
+    }
+
+    @Test
+    void aFinishedBatchGetsACompletedTimeOnceAndKeepsIt() throws Exception {
+        Batch parent = batch(null);
+        Date flowEnd = new Date(1_000);
+        parent.setCompletedAt(flowEnd);
+        Batch subBatch = batch("S1");
+        Map<String, List<Transfer>> transfers = Map.of(BATCH_ID, List.of(transfer(TransferStatus.COMPLETED, "10"), transfer(TransferStatus.FAILED, "16")));
+
+        summarise(List.of(parent, subBatch), transfers);
+        Date first = subBatch.getCompletedAt();
+        assertNotNull(first, "no transfer ongoing: the sub-batch is complete");
+        assertSame(flowEnd, parent.getCompletedAt(), "the importer's flow end time is kept");
+
+        summarise(List.of(parent, subBatch), transfers);
+        assertSame(first, subBatch.getCompletedAt(), "a later read keeps the first completed time");
+    }
+
+    @Test
+    void aBatchWithNoTransfersYetHasNoCompletedTime() throws Exception {
+        Batch parent = batch(null);
+
+        summarise(List.of(parent), Map.of());
+
+        assertNull(parent.getCompletedAt());
     }
 
     private static BatchDTO summarise(List<Batch> rows, Map<String, List<Transfer>> transfersByBatchId) throws Exception {
